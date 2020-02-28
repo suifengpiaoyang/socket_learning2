@@ -1,34 +1,35 @@
+import select
 import socket
 
 """
 The first version : use socket blocking
+The second version : use socket nonblocking
+The third version : use select
 """
 
-address = ('127.0.0.1',9999)
-sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-sock.bind(address)
-sock.setblocking(False)
-sock.listen(5)
-client_list = []
+address = ('127.0.0.1', 9999)
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind(address)
+server.setblocking(False)
+server.listen(5)
+input = [server]
 print('Waitting for client connect...')
 
 while True:
-    try:
-        client,addr = sock.accept()
-        client_list.append(client)
-        client.setblocking(False)
-        print('Connected from {}'.format(addr))
-    except BlockingIOError:
-        pass
 
-    tmp_client_list = [line for line in client_list]
-    if len(tmp_client_list) != 0:
-        for client in tmp_client_list:
-            data = client.recv(1024)
-            print('Recved data 【{}】 from {}'.format(data,addr[0]))
-            client.sendall(data)
+    readable, _, _ = select.select(input, [], [])
+
+    for sock in input:
+        if sock is server:
+            client,addr = sock.accept()
+            print('Connected from {}'.format(addr))
+            client.setblocking(False)
+            input.append(client)
+        else:
+            data = sock.recv(1024)
+            print('Recved data 【{}】 from {}'.format(data, sock.getpeername()))
+            sock.sendall(data)
             print('Send data【{}】 to the client.'.format(data))
-            client.close()
-            client_list.remove(client)
-    else:
-        pass
+            sock.close()
+            input.remove(sock)
